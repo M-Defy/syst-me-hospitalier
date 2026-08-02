@@ -1,6 +1,6 @@
 # Système d'Information Hospitalier (SIH) — Projet d'examen
 
-Projet réalisé dans le cadre de l'examen d'Ingénierie des Logiciels — Licence 2 Informatique.
+Projet réalisé pour l'Ingénierie des Logiciels — Licence 2 Informatique.
 
 ## Équipe
 | Rôle | Membre |

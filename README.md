@@ -7,9 +7,9 @@ Projet réalisé pour l'Ingénierie des Logiciels — Licence 2 Informatique.
 |---|---|
 | Chef de Projet / Product Owner | Miohitra (M-Defy) |
 | Lead Backend / Architecte | Tsiry (Niffty77) |
-| Développeur Backend | [Nom] |
-| Développeur Frontend / UI-UX | [Nom] |
-| DevOps / QA / Documentation | [Nom] |
+| Développeur Backend | Séverin(Saefjaos) |
+| Développeur Frontend / UI-UX | Tsanta(TSANTANIAINAKely) |
+| DevOps / QA / Documentation | Antsa |
 
 ## Documentation
 - [Document de spécifications](docs/Document_Specifications_SIH_v1.docx)

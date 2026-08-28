@@ -70,13 +70,13 @@ export default function Sidebar({ collapsed, onToggleCollapse, mobileOpen, onClo
 
         <div className="sidebar-footer">
           <div className="sidebar-user">
-            <div className="sidebar-avatar">{initials(user?.nom || 'U')}</div>
+            <div className="sidebar-avatar">{initials(user?.first_name || user?.username || 'U')}</div>
             <div className="sidebar-user-meta">
-              <div className="sidebar-user-name">Dr. {user?.nom}</div>
+              <div className="sidebar-user-name">{user?.first_name || user?.username}</div>
               <div className="sidebar-user-role">{user?.role}</div>
             </div>
           </div>
-          <button className="sidebar-logout" onClick={logout}>
+          <button className="sidebar-logout" onClick={() => logout()}>
             <IconLogOut size={16} />
             <span>Déconnexion</span>
           </button>

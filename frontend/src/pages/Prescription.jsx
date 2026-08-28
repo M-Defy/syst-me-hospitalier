@@ -1,27 +1,32 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { patients, medecins } from '../data/mockData';
+import { listPatients } from '../api/patients';
+import { createPrescription } from '../api/prescriptions';
 import { useToast } from '../components/Toast';
+import { useAuth } from '../context/AuthContext';
 import { IconPlus, IconTrash } from '../components/icons';
-
-const FORMES = ['Comprimé', 'Sirop', 'Injection', 'Gélule', 'Pommade', 'Suppositoire'];
-const VOIES = ['Orale', 'Intraveineuse', 'Intramusculaire', 'Sous-cutanée', 'Topique'];
 
 let uid = 0;
 const newMedication = () => ({
   id: `med-${++uid}`,
-  medicament: '', dci: '', dosage: '', forme: '', voie: '',
-  frequence: '', duree: '', dateDebut: '', dateFin: '', instructions: '',
+  medicament: '', posologie: '',
 });
 
 export default function Prescription() {
   const navigate = useNavigate();
   const { notify } = useToast();
+  const { user } = useAuth();
   const [patientId, setPatientId] = useState('');
-  const [medecin, setMedecin] = useState('');
+  const [patients, setPatients] = useState([]);
   const [medications, setMedications] = useState([newMedication()]);
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    listPatients()
+      .then((data) => setPatients(Array.isArray(data) ? data : data.results || []))
+      .catch(() => {});
+  }, []);
 
   const updateMed = (id, field) => (e) => {
     const value = e.target.value;
@@ -34,28 +39,44 @@ export default function Prescription() {
   const validate = () => {
     const next = {};
     if (!patientId) next.patientId = 'Sélectionnez un patient.';
-    if (!medecin) next.medecin = 'Sélectionnez un médecin.';
     medications.forEach((m) => {
-      if (!m.medicament.trim() || !m.dosage.trim() || !m.frequence.trim()) {
-        next.medications = 'Chaque médicament doit avoir au minimum un nom, un dosage et une fréquence.';
+      if (!m.medicament.trim() || !m.posologie.trim()) {
+        next.medications = 'Chaque médicament doit avoir un nom et une posologie.';
       }
     });
     setErrors(next);
     return Object.keys(next).length === 0;
   };
 
-  const handleSubmit = (e) => {
+  if (user?.role !== 'MEDECIN') {
+    return (
+      <div className="card">
+        <div className="empty-state">
+          <h4>Accès restreint</h4>
+          <p>Seul un médecin peut créer une prescription.</p>
+        </div>
+      </div>
+    );
+  }
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!validate()) {
       notify('Veuillez compléter les champs obligatoires.', 'error');
       return;
     }
     setIsSubmitting(true);
-    window.setTimeout(() => {
-      setIsSubmitting(false);
+    try {
+      for (const m of medications) {
+        await createPrescription({ patient: patientId, medicament: m.medicament, posologie: m.posologie });
+      }
       notify('Prescription enregistrée.', 'success');
       navigate('/patients');
-    }, 500);
+    } catch (err) {
+      notify(err.response?.data?.detail || 'Erreur lors de l\'enregistrement de la prescription.', 'error');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -71,21 +92,13 @@ export default function Prescription() {
         <div className="card" style={{ marginBottom: 20 }}>
           <div className="card-body">
             <div className="form-grid">
-              <div className="field">
+              <div className="field span-2">
                 <label htmlFor="patientId">Patient<span className="required">*</span></label>
                 <select id="patientId" className={'input' + (errors.patientId ? ' has-error' : '')} value={patientId} onChange={(e) => setPatientId(e.target.value)}>
                   <option value="">Sélectionner un patient...</option>
-                  {patients.map((p) => <option key={p.id} value={p.id}>{p.prenom} {p.nom} — {p.ipp}</option>)}
+                  {patients.map((p) => <option key={p.id} value={p.id}>{p.prenom} {p.nom}</option>)}
                 </select>
                 {errors.patientId && <span className="error-text">{errors.patientId}</span>}
-              </div>
-              <div className="field">
-                <label htmlFor="medecin">Médecin<span className="required">*</span></label>
-                <select id="medecin" className={'input' + (errors.medecin ? ' has-error' : '')} value={medecin} onChange={(e) => setMedecin(e.target.value)}>
-                  <option value="">Sélectionner...</option>
-                  {medecins.map((m) => <option key={m} value={m}>{m}</option>)}
-                </select>
-                {errors.medecin && <span className="error-text">{errors.medecin}</span>}
               </div>
             </div>
           </div>
@@ -111,47 +124,9 @@ export default function Prescription() {
                 <label>Médicament<span className="required">*</span></label>
                 <input className="input" value={m.medicament} onChange={updateMed(m.id, 'medicament')} placeholder="Ex : Amoxicilline" />
               </div>
-              <div className="field">
-                <label>DCI</label>
-                <input className="input" value={m.dci} onChange={updateMed(m.id, 'dci')} placeholder="Dénomination commune internationale" />
-              </div>
-              <div className="field">
-                <label>Dosage<span className="required">*</span></label>
-                <input className="input" value={m.dosage} onChange={updateMed(m.id, 'dosage')} placeholder="Ex : 500 mg" />
-              </div>
-              <div className="field">
-                <label>Forme</label>
-                <select className="input" value={m.forme} onChange={updateMed(m.id, 'forme')}>
-                  <option value="">Sélectionner...</option>
-                  {FORMES.map((f) => <option key={f} value={f}>{f}</option>)}
-                </select>
-              </div>
-              <div className="field">
-                <label>Voie</label>
-                <select className="input" value={m.voie} onChange={updateMed(m.id, 'voie')}>
-                  <option value="">Sélectionner...</option>
-                  {VOIES.map((v) => <option key={v} value={v}>{v}</option>)}
-                </select>
-              </div>
-              <div className="field">
-                <label>Fréquence<span className="required">*</span></label>
-                <input className="input" value={m.frequence} onChange={updateMed(m.id, 'frequence')} placeholder="Ex : 3x / jour" />
-              </div>
-              <div className="field">
-                <label>Durée</label>
-                <input className="input" value={m.duree} onChange={updateMed(m.id, 'duree')} placeholder="Ex : 7 jours" />
-              </div>
-              <div className="field">
-                <label>Date début</label>
-                <input type="date" className="input" value={m.dateDebut} onChange={updateMed(m.id, 'dateDebut')} />
-              </div>
-              <div className="field">
-                <label>Date fin</label>
-                <input type="date" className="input" value={m.dateFin} onChange={updateMed(m.id, 'dateFin')} />
-              </div>
-              <div className="field span-2" style={{ gridColumn: '1 / -1' }}>
-                <label>Instructions</label>
-                <textarea className="input" value={m.instructions} onChange={updateMed(m.id, 'instructions')} placeholder="Ex : à prendre après les repas" />
+              <div className="field span-2">
+                <label>Posologie<span className="required">*</span></label>
+                <input className="input" value={m.posologie} onChange={updateMed(m.id, 'posologie')} placeholder="Ex : 500 mg, 3x / jour pendant 7 jours" />
               </div>
             </div>
           </div>
@@ -172,3 +147,4 @@ export default function Prescription() {
     </div>
   );
 }
+

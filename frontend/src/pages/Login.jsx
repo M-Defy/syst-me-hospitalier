@@ -8,7 +8,7 @@ export default function Login() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState({});
@@ -22,28 +22,25 @@ export default function Login() {
 
   const validate = () => {
     const next = {};
-    if (!email.trim()) next.email = 'L\'adresse email est requise.';
-    else if (!/^\S+@\S+\.\S+$/.test(email)) next.email = 'Adresse email invalide.';
+    if (!username.trim()) next.username = 'Le nom d\'utilisateur est requis.';
     if (!password) next.password = 'Le mot de passe est requis.';
     setErrors(next);
     return Object.keys(next).length === 0;
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setFormError('');
     if (!validate()) return;
 
     setIsSubmitting(true);
-    window.setTimeout(() => {
-      const result = login(email, password);
-      setIsSubmitting(false);
-      if (result.success) {
-        navigate(location.state?.from || '/dashboard', { replace: true });
-      } else {
-        setFormError(result.message);
-      }
-    }, 420);
+    const result = await login(username, password);
+    setIsSubmitting(false);
+    if (result.success) {
+      navigate(location.state?.from || '/dashboard', { replace: true });
+    } else {
+      setFormError(result.message);
+    }
   };
 
   return (
@@ -100,19 +97,19 @@ export default function Login() {
             )}
 
             <div className="field">
-              <label htmlFor="email">Email professionnel<span className="required">*</span></label>
+              <label htmlFor="username">Nom d'utilisateur<span className="required">*</span></label>
               <input
-                id="email"
-                type="email"
-                className={'input' + (errors.email ? ' has-error' : '')}
-                placeholder="prenom.nom@sih.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                id="username"
+                type="text"
+                className={'input' + (errors.username ? ' has-error' : '')}
+                placeholder="prenom.nom"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
                 autoComplete="username"
-                aria-invalid={!!errors.email}
-                aria-describedby={errors.email ? 'email-error' : undefined}
+                aria-invalid={!!errors.username}
+                aria-describedby={errors.username ? 'username-error' : undefined}
               />
-              {errors.email && <span className="error-text" id="email-error">{errors.email}</span>}
+              {errors.username && <span className="error-text" id="username-error">{errors.username}</span>}
             </div>
 
             <div className="field">
@@ -157,9 +154,9 @@ export default function Login() {
 
           <div className="login-demo-box">
             <strong>Comptes de démonstration</strong><br />
-            admin@sih.com / admin123 — Administrateur<br />
-            medecin@sih.com / medecin123 — Médecin<br />
-            infirmier@sih.com / infirmier123 — Infirmier
+            Créez des comptes via <code>python manage.py createsuperuser</code> ou
+            l'admin Django (<code>/admin/</code>), puis attribuez un rôle
+            (MEDECIN, INFIRMIER, ADMINISTRATIF) à chaque utilisateur.
           </div>
         </div>
       </main>

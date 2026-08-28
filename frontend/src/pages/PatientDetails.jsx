@@ -1,37 +1,64 @@
+import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { getPatientById, getPrescriptionsForPatient } from '../data/mockData';
-import { IconEdit, IconPill, IconAdmission, IconEmpty, IconChevronLeft } from '../components/icons';
-
-const STATUS_BADGE = {
-  'Hospitalisé': 'badge-blue',
-  'Critique': 'badge-red',
-  'Sorti': 'badge-gray',
-  'Maintenance': 'badge-orange',
-};
+import { getPatient } from '../api/patients';
+import { listPrescriptions } from '../api/prescriptions';
+import { useAuth } from '../context/AuthContext';
+import { IconPill, IconAdmission, IconEmpty, IconChevronLeft } from '../components/icons';
 
 const PRESCRIPTION_BADGE = {
-  Active: 'badge-green',
-  Terminée: 'badge-gray',
-  Annulée: 'badge-red',
+  ACTIVE: 'badge-green',
+  ANNULEE: 'badge-red',
 };
 
 function initials(nom, prenom) {
   return `${prenom?.[0] || ''}${nom?.[0] || ''}`.toUpperCase();
 }
 
+const CAN_SEE_HISTORY = ['MEDECIN', 'INFIRMIER'];
+
 export default function PatientDetails() {
   const { id } = useParams();
-  const navigate = useNavigate();
-  const patient = getPatientById(id);
-  const prescriptions = patient ? getPrescriptionsForPatient(patient.id) : [];
+  const { user } = useAuth();
+  const [patient, setPatient] = useState(null);
+  const [prescriptions, setPrescriptions] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
 
-  if (!patient) {
+  useEffect(() => {
+    let cancelled = false;
+    setIsLoading(true);
+    getPatient(id)
+      .then((data) => {
+        if (cancelled) return;
+        setPatient(data);
+        if (CAN_SEE_HISTORY.includes(user?.role)) {
+          return listPrescriptions({ patient: id }).then((list) => {
+            if (!cancelled) setPrescriptions(Array.isArray(list) ? list : list.results || []);
+          });
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setNotFound(true);
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [id, user]);
+
+  if (isLoading) {
+    return (
+      <div className="card"><div className="empty-state"><span className="loading-spinner" /></div></div>
+    );
+  }
+
+  if (notFound || !patient) {
     return (
       <div className="card">
         <div className="empty-state">
           <div className="empty-state-icon"><IconEmpty size={24} /></div>
           <h4>Dossier introuvable</h4>
-          <p>Ce patient n'existe pas ou a été retiré des données de démonstration.</p>
+          <p>Ce patient n'existe pas ou vous n'avez pas les droits pour le consulter.</p>
           <Link to="/patients" className="btn btn-secondary btn-sm" style={{ marginTop: 14 }}>
             <IconChevronLeft size={15} /> Retour à la liste
           </Link>
@@ -52,71 +79,39 @@ export default function PatientDetails() {
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <h2 style={{ fontSize: 20, fontWeight: 800 }}>{patient.prenom} {patient.nom}</h2>
-              <span className={'badge ' + (STATUS_BADGE[patient.statut] || 'badge-gray')}>{patient.statut}</span>
             </div>
-            <div className="text-secondary text-mono" style={{ marginTop: 3, fontSize: 13 }}>{patient.ipp}</div>
+            <div className="text-secondary text-mono" style={{ marginTop: 3, fontSize: 13 }}>Dossier #{patient.id}</div>
           </div>
           <div className="record-actions">
-            <button className="btn btn-secondary btn-sm"><IconEdit size={15} /> Modifier</button>
-            <Link to="/prescriptions" className="btn btn-secondary btn-sm"><IconPill size={15} /> Nouvelle prescription</Link>
+            {user?.role === 'MEDECIN' && (
+              <Link to="/prescriptions" className="btn btn-secondary btn-sm"><IconPill size={15} /> Nouvelle prescription</Link>
+            )}
             <Link to="/admissions" className="btn btn-primary btn-sm"><IconAdmission size={15} /> Créer admission</Link>
           </div>
         </div>
 
         <div className="info-grid">
-          <div><div className="info-item-label">Date de naissance</div><div className="info-item-value">{new Date(patient.naissance).toLocaleDateString('fr-FR')}</div></div>
-          <div><div className="info-item-label">Sexe</div><div className="info-item-value">{patient.sexe === 'M' ? 'Masculin' : 'Féminin'}</div></div>
-          <div><div className="info-item-label">Téléphone</div><div className="info-item-value">{patient.telephone}</div></div>
-          <div><div className="info-item-label">Service</div><div className="info-item-value">{patient.service}</div></div>
-          <div><div className="info-item-label">Chambre</div><div className="info-item-value">{patient.chambre}</div></div>
-          <div><div className="info-item-label">Lit</div><div className="info-item-value">{patient.lit}</div></div>
-          <div><div className="info-item-label">Admission</div><div className="info-item-value">{patient.admission ? new Date(patient.admission).toLocaleDateString('fr-FR') : '—'}</div></div>
-          <div><div className="info-item-label">Groupe sanguin</div><div className="info-item-value">{patient.groupeSanguin || '—'}</div></div>
-        </div>
-      </div>
-
-      <div className="two-col section-block">
-        <div className="card">
-          <div className="card-header"><span className="section-title">Informations médicales</span></div>
-          <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-            <div>
-              <div className="info-item-label" style={{ marginBottom: 8 }}>Allergies</div>
-              {patient.allergies?.length ? (
-                <div className="tag-list">{patient.allergies.map((a) => <span key={a} className="tag-pill" style={{ color: 'var(--red-600)', background: 'var(--red-100)', border: 'none' }}>{a}</span>)}</div>
-              ) : <span className="text-secondary" style={{ fontSize: 13 }}>Aucune allergie connue</span>}
-            </div>
-            <div>
-              <div className="info-item-label" style={{ marginBottom: 8 }}>Antécédents</div>
-              {patient.antecedents?.length ? (
-                <div className="tag-list">{patient.antecedents.map((a) => <span key={a} className="tag-pill">{a}</span>)}</div>
-              ) : <span className="text-secondary" style={{ fontSize: 13 }}>Aucun antécédent renseigné</span>}
-            </div>
-            <div>
-              <div className="info-item-label" style={{ marginBottom: 8 }}>Traitements en cours</div>
-              {patient.traitements?.length ? (
-                <div className="tag-list">{patient.traitements.map((a) => <span key={a} className="tag-pill" style={{ color: 'var(--green-600)', background: 'var(--green-100)', border: 'none' }}>{a}</span>)}</div>
-              ) : <span className="text-secondary" style={{ fontSize: 13 }}>Aucun traitement en cours</span>}
-            </div>
-          </div>
-        </div>
-
-        <div className="card">
-          <div className="card-header"><span className="section-title">Séjour actuel</span></div>
-          <div className="card-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <div><div className="info-item-label">Service</div><div className="info-item-value">{patient.service}</div></div>
-            <div><div className="info-item-label">Chambre / Lit</div><div className="info-item-value">{patient.chambre} — {patient.lit}</div></div>
-            <div><div className="info-item-label">Admission</div><div className="info-item-value">{patient.admission ? new Date(patient.admission).toLocaleDateString('fr-FR') : '—'}</div></div>
-            <div><div className="info-item-label">Statut</div><span className={'badge ' + (STATUS_BADGE[patient.statut] || 'badge-gray')}>{patient.statut}</span></div>
-          </div>
+          <div><div className="info-item-label">Date de naissance</div><div className="info-item-value">{patient.date_naissance ? new Date(patient.date_naissance).toLocaleDateString('fr-FR') : '—'}</div></div>
+          <div><div className="info-item-label">Sexe</div><div className="info-item-value">{patient.sexe === 'M' ? 'Masculin' : patient.sexe === 'F' ? 'Féminin' : 'Autre'}</div></div>
+          <div><div className="info-item-label">Adresse</div><div className="info-item-value">{patient.adresse || '—'}</div></div>
+          <div><div className="info-item-label">Contact d'urgence</div><div className="info-item-value">{patient.contact_urgence || '—'}</div></div>
+          <div><div className="info-item-label">Créé le</div><div className="info-item-value">{patient.date_creation ? new Date(patient.date_creation).toLocaleString('fr-FR') : '—'}</div></div>
+          <div><div className="info-item-label">Dernière modification</div><div className="info-item-value">{patient.date_modification ? new Date(patient.date_modification).toLocaleString('fr-FR') : '—'}</div></div>
         </div>
       </div>
 
       <div className="card section-block">
         <div className="card-header">
           <span className="section-title">Historique des prescriptions</span>
-          <Link to="/prescriptions" className="btn btn-primary btn-sm">+ Nouvelle prescription</Link>
+          {user?.role === 'MEDECIN' && <Link to="/prescriptions" className="btn btn-primary btn-sm">+ Nouvelle prescription</Link>}
         </div>
-        {prescriptions.length === 0 ? (
+        {!CAN_SEE_HISTORY.includes(user?.role) ? (
+          <div className="empty-state">
+            <div className="empty-state-icon"><IconPill size={22} /></div>
+            <h4>Accès restreint</h4>
+            <p>L'historique médical est réservé au personnel soignant (médecin, infirmier).</p>
+          </div>
+        ) : prescriptions.length === 0 ? (
           <div className="empty-state">
             <div className="empty-state-icon"><IconPill size={22} /></div>
             <h4>Aucune prescription enregistrée</h4>
@@ -127,19 +122,17 @@ export default function PatientDetails() {
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>Date</th><th>Médecin</th><th>Médicament</th><th>Dosage</th><th>Fréquence</th><th>Durée</th><th>Statut</th>
+                  <th>Date</th><th>Médicament</th><th>Posologie</th><th>Statut</th><th>Motif d'annulation</th>
                 </tr>
               </thead>
               <tbody>
                 {prescriptions.map((p) => (
                   <tr key={p.id}>
-                    <td>{new Date(p.date).toLocaleDateString('fr-FR')}</td>
-                    <td>{p.medecin}</td>
+                    <td>{new Date(p.date_prescription).toLocaleDateString('fr-FR')}</td>
                     <td className="cell-primary">{p.medicament}</td>
-                    <td>{p.dosage}</td>
-                    <td>{p.frequence}</td>
-                    <td>{p.duree}</td>
+                    <td>{p.posologie}</td>
                     <td><span className={'badge ' + (PRESCRIPTION_BADGE[p.statut] || 'badge-gray')}>{p.statut}</span></td>
+                    <td>{p.motif_annulation || '—'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -150,3 +143,4 @@ export default function PatientDetails() {
     </div>
   );
 }
+

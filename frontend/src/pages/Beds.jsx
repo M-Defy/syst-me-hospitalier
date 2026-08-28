@@ -1,32 +1,38 @@
-import { useMemo, useState } from 'react';
-import { beds, services } from '../data/mockData';
+import { useEffect, useMemo, useState } from 'react';
+import { listLits } from '../api/admissions';
 import { IconBed, IconEmpty } from '../components/icons';
 
 const STATUS_META = {
-  'Disponible': { dot: '🟢', badge: 'badge-green' },
-  'Occupé': { dot: '🔴', badge: 'badge-red' },
-  'Maintenance': { dot: '🟠', badge: 'badge-orange' },
+  'LIBRE': { dot: '🟢', badge: 'badge-green', label: 'Libre' },
+  'OCCUPE': { dot: '🔴', badge: 'badge-red', label: 'Occupé' },
 };
 
 export default function Beds() {
   const [service, setService] = useState('all');
   const [statut, setStatut] = useState('all');
-  const [etage, setEtage] = useState('all');
+  const [lits, setLits] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState('');
 
-  const floors = useMemo(() => [...new Set(beds.map((b) => b.etage))].sort((a, b) => a - b), []);
+  useEffect(() => {
+    listLits()
+      .then((data) => setLits(Array.isArray(data) ? data : data.results || []))
+      .catch(() => setError('Impossible de charger la liste des lits.'))
+      .finally(() => setIsLoading(false));
+  }, []);
 
-  const filtered = useMemo(() => beds.filter((b) =>
-    (service === 'all' || b.service === service) &&
-    (statut === 'all' || b.statut === statut) &&
-    (etage === 'all' || b.etage === Number(etage))
-  ), [service, statut, etage]);
+  const services = useMemo(() => [...new Set(lits.map((l) => l.service))].sort(), [lits]);
+
+  const filtered = useMemo(() => lits.filter((l) =>
+    (service === 'all' || l.service === service) &&
+    (statut === 'all' || l.statut === statut)
+  ), [lits, service, statut]);
 
   const counts = useMemo(() => ({
-    total: beds.length,
-    disponible: beds.filter((b) => b.statut === 'Disponible').length,
-    occupe: beds.filter((b) => b.statut === 'Occupé').length,
-    maintenance: beds.filter((b) => b.statut === 'Maintenance').length,
-  }), []);
+    total: lits.length,
+    disponible: lits.filter((l) => l.statut === 'LIBRE').length,
+    occupe: lits.filter((l) => l.statut === 'OCCUPE').length,
+  }), [lits]);
 
   return (
     <div>
@@ -53,11 +59,6 @@ export default function Beds() {
           <div className="stat-value">{counts.occupe}</div>
           <div className="stat-label">Occupés</div>
         </div>
-        <div className="stat-card" style={{ '--accent': 'var(--orange-600)', '--accent-soft': 'var(--orange-100)' }}>
-          <div className="stat-card-top"><div className="stat-icon"><IconBed size={19} /></div></div>
-          <div className="stat-value">{counts.maintenance}</div>
-          <div className="stat-label">Maintenance</div>
-        </div>
       </div>
 
       <div className="card section-block">
@@ -69,18 +70,17 @@ export default function Beds() {
             </select>
             <select className="select-filter" value={statut} onChange={(e) => setStatut(e.target.value)} aria-label="Filtrer par statut">
               <option value="all">Tous les statuts</option>
-              <option value="Disponible">Disponible</option>
-              <option value="Occupé">Occupé</option>
-              <option value="Maintenance">Maintenance</option>
-            </select>
-            <select className="select-filter" value={etage} onChange={(e) => setEtage(e.target.value)} aria-label="Filtrer par étage">
-              <option value="all">Tous les étages</option>
-              {floors.map((f) => <option key={f} value={f}>Étage {f}</option>)}
+              <option value="LIBRE">Libre</option>
+              <option value="OCCUPE">Occupé</option>
             </select>
           </div>
         </div>
 
-        {filtered.length === 0 ? (
+        {error && <div className="form-error-banner" role="alert" style={{ margin: '0 20px 16px' }}>{error}</div>}
+
+        {isLoading ? (
+          <div className="empty-state"><span className="loading-spinner" /></div>
+        ) : filtered.length === 0 ? (
           <div className="empty-state">
             <div className="empty-state-icon"><IconEmpty size={24} /></div>
             <h4>Aucun lit trouvé</h4>
@@ -89,20 +89,18 @@ export default function Beds() {
         ) : (
           <div className="card-body">
             <div className="beds-grid">
-              {filtered.map((b) => {
-                const meta = STATUS_META[b.statut];
+              {filtered.map((l) => {
+                const meta = STATUS_META[l.statut] || STATUS_META.LIBRE;
                 return (
-                  <div key={b.id} className="bed-card">
+                  <div key={l.id} className="bed-card">
                     <div className="bed-card-top">
                       <div>
-                        <div className="bed-card-room">Chambre {b.chambre}</div>
-                        <div className="bed-card-bed">Lit {b.lit}</div>
+                        <div className="bed-card-room">Lit {l.numero}</div>
                       </div>
-                      <span className={'badge ' + meta.badge}>{meta.dot} {b.statut}</span>
+                      <span className={'badge ' + meta.badge}>{meta.dot} {meta.label}</span>
                     </div>
                     <div className="bed-card-meta">
-                      <span>Service : <b>{b.service}</b></span>
-                      <span>Étage : <b>{b.etage}</b></span>
+                      <span>Service : <b>{l.service}</b></span>
                     </div>
                   </div>
                 );
@@ -114,3 +112,4 @@ export default function Beds() {
     </div>
   );
 }
+

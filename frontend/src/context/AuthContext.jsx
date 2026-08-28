@@ -1,15 +1,10 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import * as authApi from '../api/auth';
+import { TOKEN_STORAGE_KEY } from '../api/client';
 
 const AuthContext = createContext(null);
 
-// Comptes de démonstration (MOCK) — en attendant l'API Django REST.
-const MOCK_ACCOUNTS = [
-  { email: 'admin@sih.com', password: 'admin123', nom: 'Rasoa', role: 'Administrateur' },
-  { email: 'medecin@sih.com', password: 'medecin123', nom: 'Rakoto', role: 'Médecin' },
-  { email: 'infirmier@sih.com', password: 'infirmier123', nom: 'Voahangy', role: 'Infirmier' },
-];
-
-const STORAGE_KEY = 'sih_auth_user';
+const USER_STORAGE_KEY = 'sih_auth_user';
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
@@ -17,35 +12,38 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     try {
-      const raw = window.sessionStorage.getItem(STORAGE_KEY);
-      if (raw) setUser(JSON.parse(raw));
+      const raw = window.sessionStorage.getItem(USER_STORAGE_KEY);
+      const token = window.sessionStorage.getItem(TOKEN_STORAGE_KEY);
+      if (raw && token) setUser(JSON.parse(raw));
     } catch {
       // ignore corrupted storage
     }
     setIsLoading(false);
   }, []);
 
-  const login = (email, password) => {
-    const account = MOCK_ACCOUNTS.find(
-      (a) => a.email.toLowerCase() === email.trim().toLowerCase() && a.password === password
-    );
-    if (!account) {
-      return { success: false, message: 'Email ou mot de passe incorrect.' };
-    }
-    const sessionUser = { email: account.email, nom: account.nom, role: account.role };
-    setUser(sessionUser);
+  const login = async (username, password) => {
     try {
-      window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(sessionUser));
-    } catch {
-      // storage may be unavailable — session still works in memory
+      const { token, user: apiUser } = await authApi.login(username, password);
+      window.sessionStorage.setItem(TOKEN_STORAGE_KEY, token);
+      window.sessionStorage.setItem(USER_STORAGE_KEY, JSON.stringify(apiUser));
+      setUser(apiUser);
+      return { success: true };
+    } catch (err) {
+      const message = err.response?.data?.error || 'Nom d\'utilisateur ou mot de passe incorrect.';
+      return { success: false, message };
     }
-    return { success: true };
   };
 
-  const logout = () => {
+  const logout = async () => {
+    try {
+      await authApi.logout();
+    } catch {
+      // le token est peut-être déjà invalide côté serveur, on nettoie quand même localement
+    }
     setUser(null);
     try {
-      window.sessionStorage.removeItem(STORAGE_KEY);
+      window.sessionStorage.removeItem(USER_STORAGE_KEY);
+      window.sessionStorage.removeItem(TOKEN_STORAGE_KEY);
     } catch {
       // ignore
     }
@@ -64,3 +62,4 @@ export function useAuth() {
   if (!ctx) throw new Error('useAuth doit être utilisé à l\'intérieur de <AuthProvider>');
   return ctx;
 }
+

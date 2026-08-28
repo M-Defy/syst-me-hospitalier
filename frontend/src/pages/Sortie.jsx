@@ -1,29 +1,30 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { patients, medecins } from '../data/mockData';
+import { listSejours, sortirSejour } from '../api/admissions';
 import { useToast } from '../components/Toast';
 import Modal from '../components/Modal';
-
-const EMPTY = { patientId: '', date: '', heure: '', motif: '', medecin: '', resume: '', observations: '' };
 
 export default function Sortie() {
   const navigate = useNavigate();
   const { notify } = useToast();
-  const [form, setForm] = useState(EMPTY);
+  const [sejours, setSejours] = useState([]);
+  const [sejourId, setSejourId] = useState('');
   const [errors, setErrors] = useState({});
   const [showConfirm, setShowConfirm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const update = (field) => (e) => setForm((f) => ({ ...f, [field]: e.target.value }));
-  const selectedPatient = patients.find((p) => p.id === form.patientId);
+  useEffect(() => {
+    listSejours({ statut: 'EN_COURS' })
+      .then((data) => setSejours(Array.isArray(data) ? data : data.results || []))
+      .finally(() => setIsLoading(false));
+  }, []);
+
+  const selectedSejour = sejours.find((s) => String(s.id) === String(sejourId));
 
   const validate = () => {
     const next = {};
-    if (!form.patientId) next.patientId = 'Sélectionnez un patient.';
-    if (!form.date) next.date = 'La date est requise.';
-    if (!form.heure) next.heure = 'L\'heure est requise.';
-    if (!form.motif.trim()) next.motif = 'Le motif de sortie est requis.';
-    if (!form.medecin) next.medecin = 'Le médecin est requis.';
+    if (!sejourId) next.sejourId = 'Sélectionnez un séjour en cours.';
     setErrors(next);
     return Object.keys(next).length === 0;
   };
@@ -31,20 +32,24 @@ export default function Sortie() {
   const handleReview = (e) => {
     e.preventDefault();
     if (!validate()) {
-      notify('Veuillez compléter les champs obligatoires.', 'error');
+      notify('Veuillez sélectionner un séjour.', 'error');
       return;
     }
     setShowConfirm(true);
   };
 
-  const confirmSortie = () => {
+  const confirmSortie = async () => {
     setIsSubmitting(true);
-    window.setTimeout(() => {
-      setIsSubmitting(false);
-      setShowConfirm(false);
+    try {
+      await sortirSejour(sejourId);
       notify('Sortie validée avec succès.', 'success');
       navigate('/patients');
-    }, 500);
+    } catch (err) {
+      notify(err.response?.data?.error || 'Erreur lors de la validation de la sortie.', 'error');
+    } finally {
+      setIsSubmitting(false);
+      setShowConfirm(false);
+    }
   };
 
   return (
@@ -61,43 +66,18 @@ export default function Sortie() {
           <div className="card-body">
             <div className="form-grid">
               <div className="field span-2">
-                <label htmlFor="patientId">Patient<span className="required">*</span></label>
-                <select id="patientId" className={'input' + (errors.patientId ? ' has-error' : '')} value={form.patientId} onChange={update('patientId')}>
-                  <option value="">Sélectionner un patient...</option>
-                  {patients.map((p) => <option key={p.id} value={p.id}>{p.prenom} {p.nom} — {p.ipp} ({p.service})</option>)}
+                <label htmlFor="sejourId">Séjour en cours<span className="required">*</span></label>
+                <select id="sejourId" className={'input' + (errors.sejourId ? ' has-error' : '')} value={sejourId} onChange={(e) => setSejourId(e.target.value)} disabled={isLoading}>
+                  <option value="">
+                    {isLoading ? 'Chargement...' : sejours.length === 0 ? 'Aucun séjour en cours' : 'Sélectionner un séjour...'}
+                  </option>
+                  {sejours.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      Séjour #{s.id} — Patient #{s.patient} — Lit {s.lit ?? '—'}
+                    </option>
+                  ))}
                 </select>
-                {errors.patientId && <span className="error-text">{errors.patientId}</span>}
-              </div>
-              <div className="field">
-                <label htmlFor="date">Date<span className="required">*</span></label>
-                <input id="date" type="date" className={'input' + (errors.date ? ' has-error' : '')} value={form.date} onChange={update('date')} />
-                {errors.date && <span className="error-text">{errors.date}</span>}
-              </div>
-              <div className="field">
-                <label htmlFor="heure">Heure<span className="required">*</span></label>
-                <input id="heure" type="time" className={'input' + (errors.heure ? ' has-error' : '')} value={form.heure} onChange={update('heure')} />
-                {errors.heure && <span className="error-text">{errors.heure}</span>}
-              </div>
-              <div className="field span-2">
-                <label htmlFor="motif">Motif<span className="required">*</span></label>
-                <input id="motif" className={'input' + (errors.motif ? ' has-error' : '')} value={form.motif} onChange={update('motif')} placeholder="Ex : guérison, transfert, sortie contre avis médical" />
-                {errors.motif && <span className="error-text">{errors.motif}</span>}
-              </div>
-              <div className="field span-2">
-                <label htmlFor="medecin">Médecin<span className="required">*</span></label>
-                <select id="medecin" className={'input' + (errors.medecin ? ' has-error' : '')} value={form.medecin} onChange={update('medecin')}>
-                  <option value="">Sélectionner...</option>
-                  {medecins.map((m) => <option key={m} value={m}>{m}</option>)}
-                </select>
-                {errors.medecin && <span className="error-text">{errors.medecin}</span>}
-              </div>
-              <div className="field span-2">
-                <label htmlFor="resume">Résumé</label>
-                <textarea id="resume" className="input" value={form.resume} onChange={update('resume')} placeholder="Résumé de l'hospitalisation..." />
-              </div>
-              <div className="field span-2">
-                <label htmlFor="observations">Observations</label>
-                <textarea id="observations" className="input" value={form.observations} onChange={update('observations')} placeholder="Consignes de suivi, recommandations..." />
+                {errors.sejourId && <span className="error-text">{errors.sejourId}</span>}
               </div>
             </div>
           </div>
@@ -124,14 +104,14 @@ export default function Sortie() {
           }
         >
           <div className="confirm-panel">
-            Vous êtes sur le point de valider la sortie de{' '}
-            <b>{selectedPatient?.prenom} {selectedPatient?.nom}</b> ({selectedPatient?.ipp}),
-            prévue le <b>{form.date ? new Date(form.date).toLocaleDateString('fr-FR') : '—'}</b> à <b>{form.heure}</b>.
+            Vous êtes sur le point de valider la sortie du séjour <b>#{selectedSejour?.id}</b>
+            (patient #{selectedSejour?.patient}).
             <br /><br />
-            Cette action mettra à jour le statut du patient et libérera son lit. Veuillez vérifier les informations avant de continuer.
+            Cette action mettra à jour le statut du séjour et libérera réellement le lit associé.
           </div>
         </Modal>
       )}
     </div>
   );
 }
+

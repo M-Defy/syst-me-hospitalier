@@ -12,5 +12,5 @@ urlpatterns = [
     path('api/', include('patients.urls')),
     path('api/', include('admissions.urls')),
     path('api/', include('prescriptions.urls')),
-    re_path(r'^(?!api/|admin/).*$', TemplateView.as_view(template_name='index.html')),
+    re_path(r'^(?!api/|admin/|assets/).*$', TemplateView.as_view(template_name='index.html')),
 ]
